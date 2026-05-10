@@ -1,0 +1,764 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>IG Feed Studio</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Mono:ital@0;1&family=Instrument+Serif:ital@0;1&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#0c0c0c;--surface:#131313;--panel:#161616;
+  --border:#242424;--border2:#1c1c1c;
+  --text:#e8e8e8;--muted:#4a4a4a;--dim:#333;
+  --accent:#c8b8a2;
+  --g:#4caf50;--a:#e09e4a;--r:#e05a4a;--b:#4a90e0;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%;overflow:hidden}
+body{font-family:'DM Sans',system-ui,sans-serif;background:var(--bg);color:var(--text);font-size:12px}
+
+/* TOAST ALERT */
+#toastWrap{position:fixed;top:16px;right:16px;z-index:9999;display:flex;flex-direction:column;gap:8px;pointer-events:none}
+.toast{padding:10px 16px;border-radius:8px;font-size:11px;font-family:'DM Mono',monospace;letter-spacing:.04em;display:flex;align-items:center;gap:8px;pointer-events:all;animation:tin .25s ease;box-shadow:0 4px 24px rgba(0,0,0,.5);min-width:220px;max-width:320px;border:1px solid transparent}
+.toast.out{animation:tout .25s ease forwards}
+.toast-dot{width:6px;height:6px;border-radius:50%;flex-shrink:0}
+.toast-g{background:#0d1f0d;border-color:#1a3a1a;color:#7ecf7e}.toast-g .toast-dot{background:var(--g)}
+.toast-a{background:#1f180d;border-color:#3a2a1a;color:#cfb07e}.toast-a .toast-dot{background:var(--a)}
+.toast-r{background:#1f0d0d;border-color:#3a1a1a;color:#cf7e7e}.toast-r .toast-dot{background:var(--r)}
+.toast-b{background:#0d1525;border-color:#1a2a40;color:#7eaecf}.toast-b .toast-dot{background:var(--b)}
+@keyframes tin{from{opacity:0;transform:translateX(20px)}to{opacity:1;transform:translateX(0)}}
+@keyframes tout{to{opacity:0;transform:translateX(20px)}}
+
+.app{display:grid;grid-template-columns:1fr 278px;height:100vh}
+.left{display:flex;flex-direction:column;overflow:hidden}
+.right{display:flex;flex-direction:column;background:var(--panel);border-left:1px solid var(--border);overflow:hidden}
+
+/* url bar */
+.ubar{padding:8px 12px;background:var(--surface);border-bottom:1px solid var(--border);display:flex;gap:6px;align-items:center;flex-shrink:0}
+.ubar-lbl{font-family:'DM Mono',monospace;font-size:9px;color:var(--muted);letter-spacing:.1em;text-transform:uppercase;white-space:nowrap}
+.uin{flex:1;padding:6px 10px;font-size:11px;background:var(--bg);border:1px solid var(--border);border-radius:6px;color:var(--text);outline:none;transition:border-color .2s;font-family:'DM Sans',sans-serif}
+.uin:focus{border-color:var(--dim)}.uin::placeholder{color:#252525}
+.ubtn{padding:6px 12px;font-size:11px;font-family:'DM Sans',sans-serif;font-weight:500;border:none;border-radius:6px;cursor:pointer;white-space:nowrap;transition:all .15s}
+.ubp{background:var(--text);color:#000}.ubp:hover{opacity:.85}.ubp:disabled{opacity:.2;cursor:default}
+.ubg{background:transparent;color:var(--muted);border:1px solid var(--border)}.ubg:hover{color:var(--text);border-color:var(--dim)}
+
+/* canvas */
+.ca{flex:1;display:flex;align-items:center;justify-content:center;padding:16px;position:relative;overflow:hidden;background:#080808;background-image:radial-gradient(ellipse at 15% 85%,rgba(200,184,162,.04) 0%,transparent 55%)}
+.dz{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;cursor:pointer;border:1px dashed #1a1a1a;border-radius:12px;padding:40px;text-align:center;width:100%;max-width:340px;transition:border-color .25s}
+.dz:hover,.dz.ov{border-color:#2c2c2c}
+.dz-ic{width:44px;height:44px;border:1px solid #181818;border-radius:10px;display:flex;align-items:center;justify-content:center;background:#0c0c0c;transition:border-color .2s}
+.dz:hover .dz-ic{border-color:#262626}
+.dz-ic svg{width:20px;height:20px;stroke:#222;transition:stroke .2s}.dz:hover .dz-ic svg{stroke:#333}
+.dz-t{font-family:'Instrument Serif',serif;font-size:17px;color:#222;transition:color .2s}.dz:hover .dz-t{color:#363636}
+.dz-s{font-size:10px;color:#181818}.dz:hover .dz-s{color:#2a2a2a}
+.cw{display:none;position:relative;line-height:0}
+canvas{display:block;border-radius:5px;cursor:crosshair;box-shadow:0 8px 48px rgba(0,0,0,.9)}
+
+/* overlay preview */
+.ovlay{display:none;position:absolute;inset:0;background:rgba(6,6,6,.94);backdrop-filter:blur(8px);z-index:10;flex-direction:column;align-items:center;justify-content:center;gap:14px;padding:24px}
+.ovlay.show{display:flex}
+.ovlay img{max-width:100%;max-height:240px;border-radius:6px;border:1px solid var(--border)}
+.ov-lbl{font-family:'DM Mono',monospace;font-size:10px;color:var(--muted);letter-spacing:.06em}
+.ov-row{display:flex;gap:8px}
+
+.sb{padding:5px 14px;font-size:10px;font-family:'DM Mono',monospace;color:#262626;background:var(--surface);border-top:1px solid var(--border2);display:flex;align-items:center;gap:6px;flex-shrink:0;letter-spacing:.04em}
+.sdot{width:5px;height:5px;border-radius:50%;background:#1c1c1c;flex-shrink:0;transition:background .3s}
+.sdot.g{background:var(--g)}.sdot.a{background:var(--a);animation:bl .9s infinite}.sdot.r{background:var(--r)}.sdot.b{background:var(--b)}
+@keyframes bl{0%,100%{opacity:1}50%{opacity:.15}}
+
+/* right panel */
+.tabs{display:flex;border-bottom:1px solid var(--border);flex-shrink:0;background:var(--surface)}
+.tab{flex:1;padding:9px 0;font-size:9px;font-family:'DM Mono',monospace;letter-spacing:.08em;text-transform:uppercase;text-align:center;cursor:pointer;color:var(--muted);border-bottom:2px solid transparent;margin-bottom:-1px;transition:color .15s}
+.tab:hover{color:#888}.tab.on{color:var(--text);border-bottom-color:var(--accent)}
+.pane{display:none;flex-direction:column;gap:11px;padding:13px;overflow-y:auto;flex:1}
+.pane.on{display:flex}
+
+.lbl{display:block;font-size:9px;font-family:'DM Mono',monospace;color:var(--muted);letter-spacing:.1em;text-transform:uppercase;margin-bottom:4px}
+.sws{display:flex;gap:5px;flex-wrap:wrap;align-items:center}
+.sw{width:19px;height:19px;border-radius:50%;cursor:pointer;border:2px solid transparent;flex-shrink:0;transition:transform .1s}
+.sw:hover{transform:scale(1.15)}.sw.on{border-color:var(--text)}
+.row{display:flex;gap:3px}
+.xb{flex:1;padding:5px 2px;font-size:9px;font-family:'DM Mono',monospace;letter-spacing:.04em;border:1px solid var(--border);border-radius:5px;background:var(--bg);color:var(--muted);cursor:pointer;text-align:center;transition:all .12s}
+.xb:hover{border-color:var(--dim);color:var(--text)}.xb.on{background:var(--text);color:#000;border-color:var(--text)}
+input[type=range]{width:100%;accent-color:var(--accent);cursor:pointer}
+.sr{display:flex;justify-content:space-between;align-items:center;margin-bottom:3px}
+.val{font-size:10px;font-family:'DM Mono',monospace;color:var(--muted)}
+.tin{width:100%;padding:7px 9px;font-size:12px;font-family:'DM Sans',sans-serif;border:1px solid var(--border);border-radius:6px;background:var(--bg);color:var(--text);outline:none;resize:vertical;min-height:52px;transition:border-color .2s}
+.tin:focus{border-color:var(--dim)}
+select{width:100%;padding:5px 7px;font-size:11px;font-family:'DM Sans',sans-serif;border:1px solid var(--border);border-radius:6px;background:var(--bg);color:var(--text);outline:none;cursor:pointer}
+.hdiv{height:1px;background:var(--border2);flex-shrink:0}
+.hint{font-size:9px;font-family:'DM Mono',monospace;color:#1e1e1e;text-align:center;line-height:1.7;letter-spacing:.04em}
+.ttabs{display:flex;gap:4px;flex-wrap:wrap}
+.tt{padding:3px 8px;font-size:9px;font-family:'DM Mono',monospace;border:1px solid var(--border);border-radius:4px;background:var(--bg);color:var(--muted);cursor:pointer;letter-spacing:.04em;transition:all .12s}
+.tt:hover{color:var(--text);border-color:var(--dim)}.tt.on{background:var(--text);color:#000;border-color:var(--text)}
+.tt.del{color:#5a2020;border-color:#2a1010;background:#0c0505;padding:3px 7px}
+.tt.del:hover{background:var(--r);color:#fff;border-color:var(--r)}
+.add-btn{width:100%;margin-top:4px;padding:4px 0;font-size:9px;font-family:'DM Mono',monospace;border:1px dashed var(--border2);border-radius:5px;background:none;color:#202020;cursor:pointer;letter-spacing:.07em;transition:all .15s}
+.add-btn:hover{color:var(--muted);border-color:var(--dim)}
+.ebox{background:var(--bg);border:1px solid var(--border2);border-radius:8px;padding:10px 12px;font-size:10px;font-family:'DM Mono',monospace;color:var(--muted);line-height:1.9}
+.bexp{width:100%;padding:8px 12px;font-size:10px;font-family:'DM Mono',monospace;letter-spacing:.06em;border-radius:7px;cursor:pointer;border:1px solid var(--border);background:var(--bg);color:var(--muted);display:flex;align-items:center;justify-content:center;gap:6px;transition:all .15s}
+.bexp:hover:not(:disabled){border-color:var(--dim);color:var(--text)}
+.bexp.pri{background:var(--text);color:#000;border-color:var(--text)}.bexp.pri:hover:not(:disabled){background:#ccc}
+.bexp:disabled{opacity:.15;cursor:default}
+.exp-prev{display:none;flex-direction:column;gap:7px;border:1px solid var(--border2);border-radius:8px;padding:10px;background:var(--bg)}
+.exp-prev.show{display:flex}
+.exp-prev img{width:100%;border-radius:4px;border:1px solid var(--border2)}
+.exp-prev a{font-family:'DM Mono',monospace;font-size:9px;color:var(--muted);text-align:center;text-decoration:underline;letter-spacing:.05em;display:block}
+.exp-prev a:hover{color:var(--text)}
+.exp-sm{font-size:9px;font-family:'DM Mono',monospace;color:#252525;text-align:center;letter-spacing:.04em;line-height:1.6}
+input[type=color]{width:19px;height:19px;padding:0;border:1px solid var(--border);background:none;cursor:pointer;border-radius:50%;overflow:hidden;flex-shrink:0}
+
+/* TEMPLATE GRID */
+.tpl-grid{display:grid;grid-template-columns:1fr 1fr;gap:6px}
+.tpl-card{position:relative;border:1px solid var(--border);border-radius:7px;overflow:hidden;cursor:pointer;transition:border-color .15s;background:var(--bg)}
+.tpl-card:hover{border-color:var(--dim)}
+.tpl-card canvas{width:100%;height:auto;display:block}
+.tpl-card-label{position:absolute;bottom:0;left:0;right:0;padding:5px 7px;background:linear-gradient(to top,rgba(0,0,0,.9),transparent);font-family:'DM Mono',monospace;font-size:8px;color:rgba(255,255,255,.6);letter-spacing:.06em}
+.tpl-card-size{font-size:7px;opacity:.5;display:block;margin-top:1px}
+.tpl-section-lbl{font-family:'DM Mono',monospace;font-size:9px;color:var(--muted);letter-spacing:.08em;text-transform:uppercase;margin-bottom:5px;margin-top:4px}
+.tpl-section-lbl:first-child{margin-top:0}
+
+/* SIZE PRESETS */
+.size-grid{display:grid;grid-template-columns:1fr 1fr;gap:4px}
+.sz-card{border:1px solid var(--border);border-radius:6px;padding:8px 8px 6px;cursor:pointer;transition:border-color .15s;background:var(--bg);text-align:center}
+.sz-card:hover{border-color:var(--dim)}.sz-card.on{border-color:var(--accent);background:#1a1710}
+.sz-thumb{margin:0 auto 5px;background:var(--border);border-radius:2px}
+.sz-name{font-family:'DM Mono',monospace;font-size:8px;color:var(--muted);letter-spacing:.06em;display:block}
+.sz-px{font-family:'DM Mono',monospace;font-size:7px;color:#2a2a2a;letter-spacing:.04em;display:block;margin-top:1px}
+</style>
+</head>
+<body>
+<input type="file" id="fi" accept="image/*" style="display:none">
+<div id="toastWrap"></div>
+
+<div class="app">
+  <div class="left">
+    <div class="ubar">
+      <span class="ubar-lbl">Src</span>
+      <input class="uin" id="urlIn" placeholder="youtube · tiktok · instagram · twitter ..." onkeydown="if(event.key==='Enter')grabSS()">
+      <button class="ubtn ubp" id="ssBtn" onclick="grabSS()">Ambil</button>
+      <button class="ubtn ubg" onclick="document.getElementById('fi').click()">↑ Upload</button>
+    </div>
+    <div class="ca" id="carea">
+      <div class="dz" id="dz" onclick="document.getElementById('fi').click()">
+        <div class="dz-ic"><svg viewBox="0 0 24 24" fill="none" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="3"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg></div>
+        <div class="dz-t">Upload foto</div>
+        <div class="dz-s">klik · drag & drop · atau paste link · atau pilih template</div>
+      </div>
+      <div class="cw" id="cw"><canvas id="cv"></canvas></div>
+      <div class="ovlay" id="ovlay">
+        <div class="ov-lbl" id="ovm">preview ditemukan</div>
+        <img id="ovi" src="" alt="">
+        <div class="ov-row">
+          <button class="ubtn ubg" onclick="closeOv()">Batal</button>
+          <button class="ubtn ubp" onclick="usePreview()">Gunakan gambar ini</button>
+        </div>
+      </div>
+    </div>
+    <div class="sb"><div class="sdot" id="sdot"></div><span id="stxt">Siap — upload foto, paste link, atau pilih template</span></div>
+  </div>
+
+  <div class="right">
+    <div class="tabs">
+      <div class="tab on" onclick="goTab('template')">Template</div>
+      <div class="tab" onclick="goTab('gradient')">Gradient</div>
+      <div class="tab" onclick="goTab('teks')">Teks</div>
+      <div class="tab" onclick="goTab('export')">Export</div>
+    </div>
+
+    <!-- TEMPLATE -->
+    <div class="pane on" id="pane-template">
+      <div>
+        <div class="tpl-section-lbl">Ukuran kanvas</div>
+        <div class="size-grid" id="sizeGrid">
+          <div class="sz-card on" onclick="setCanvasSize(this,'portrait-feed')" data-w="1080" data-h="1350">
+            <div class="sz-thumb" style="width:22px;height:28px"></div>
+            <span class="sz-name">Feed Portrait</span>
+            <span class="sz-px">1080 × 1350</span>
+          </div>
+          <div class="sz-card" onclick="setCanvasSize(this,'square')" data-w="1080" data-h="1080">
+            <div class="sz-thumb" style="width:26px;height:26px"></div>
+            <span class="sz-name">Square</span>
+            <span class="sz-px">1080 × 1080</span>
+          </div>
+          <div class="sz-card" onclick="setCanvasSize(this,'landscape')" data-w="1080" data-h="608">
+            <div class="sz-thumb" style="width:30px;height:17px"></div>
+            <span class="sz-name">Landscape</span>
+            <span class="sz-px">1080 × 608</span>
+          </div>
+          <div class="sz-card" onclick="setCanvasSize(this,'story')" data-w="1080" data-h="1920">
+            <div class="sz-thumb" style="width:16px;height:28px"></div>
+            <span class="sz-name">Story / Reels</span>
+            <span class="sz-px">1080 × 1920</span>
+          </div>
+          <div class="sz-card" onclick="setCanvasSize(this,'portrait-ad')" data-w="1080" data-h="1920">
+            <div class="sz-thumb" style="width:18px;height:28px"></div>
+            <span class="sz-name">Portrait 4:5</span>
+            <span class="sz-px">1080 × 1350</span>
+          </div>
+          <div class="sz-card" onclick="setCanvasSize(this,'reel-cover')" data-w="420" data-h="654">
+            <div class="sz-thumb" style="width:17px;height:26px"></div>
+            <span class="sz-name">Reel Cover</span>
+            <span class="sz-px">420 × 654</span>
+          </div>
+        </div>
+      </div>
+      <div class="hdiv"></div>
+      <div>
+        <div class="tpl-section-lbl">Template bawaan</div>
+        <div class="tpl-grid" id="tplGrid"></div>
+      </div>
+      <div class="hint" style="margin-top:4px">klik template → langsung terapkan ke kanvas</div>
+    </div>
+
+    <!-- GRADIENT -->
+    <div class="pane" id="pane-gradient">
+      <div><span class="lbl">Warna</span>
+        <div class="sws" id="gsws">
+          <div class="sw on" style="background:#000" onclick="setGC(this,'#000000')"></div>
+          <div class="sw" style="background:#f0ece4;outline:1px solid #444;outline-offset:1px" onclick="setGC(this,'#f0ece4')"></div>
+          <div class="sw" style="background:#1B3A6B" onclick="setGC(this,'#1B3A6B')"></div>
+          <div class="sw" style="background:#2D6A4F" onclick="setGC(this,'#2D6A4F')"></div>
+          <div class="sw" style="background:#6B2D8B" onclick="setGC(this,'#6B2D8B')"></div>
+          <div class="sw" style="background:#8B2020" onclick="setGC(this,'#8B2020')"></div>
+          <div class="sw" style="background:#C87941" onclick="setGC(this,'#C87941')"></div>
+          <div class="sw" style="background:#1a3a3a" onclick="setGC(this,'#1a3a3a')"></div>
+          <div class="sw" style="background:#2a1a0a" onclick="setGC(this,'#2a1a0a')"></div>
+          <input type="color" id="gcc" value="#000000" onchange="G.c=this.value;draw()">
+        </div>
+      </div>
+      <div><span class="lbl">Arah</span>
+        <div class="row" id="drow">
+          <button class="xb on" onclick="setDir(this,'top')">↑ Bawah</button>
+          <button class="xb" onclick="setDir(this,'bot')">↓ Atas</button>
+          <button class="xb" onclick="setDir(this,'left')">← Kanan</button>
+          <button class="xb" onclick="setDir(this,'right')">→ Kiri</button>
+        </div>
+      </div>
+      <div><div class="sr"><span class="lbl" style="margin:0">Opacity</span><span class="val" id="opv">55%</span></div><input type="range" min="5" max="100" value="55" step="1" oninput="G.op=+this.value;document.getElementById('opv').textContent=this.value+'%';draw()"></div>
+      <div><div class="sr"><span class="lbl" style="margin:0">Jangkauan</span><span class="val" id="rev">65%</span></div><input type="range" min="15" max="100" value="65" step="1" oninput="G.reach=+this.value;document.getElementById('rev').textContent=this.value+'%';draw()"></div>
+      <div><div class="sr"><span class="lbl" style="margin:0">Fade tengah</span><span class="val" id="midv">55%</span></div><input type="range" min="20" max="90" value="55" step="1" oninput="G.mid=+this.value;document.getElementById('midv').textContent=this.value+'%';draw()"></div>
+    </div>
+
+    <!-- TEKS -->
+    <div class="pane" id="pane-teks">
+      <div><span class="lbl">Layer</span>
+        <div class="ttabs" id="tlayers"></div>
+        <button class="add-btn" onclick="addLayer()">+ tambah teks</button>
+      </div>
+      <div class="hdiv"></div>
+      <div><span class="lbl">Isi teks</span>
+        <textarea class="tin" id="tin" rows="2" placeholder="Ketik teks..." oninput="T[AI].text=this.value;buildLayers();draw()"></textarea>
+        <div style="margin-top:3px;font-size:9px;color:#1e1e1e;font-family:'DM Mono',monospace;letter-spacing:.04em">enter = baris baru · auto-wrap</div>
+      </div>
+      <div><span class="lbl">Font</span>
+        <select id="fsel" onchange="T[AI].font=this.value;draw()">
+          <option value="Georgia,serif">Serif — Georgia</option>
+          <option value="'Times New Roman',serif">Serif — Times</option>
+          <option value="'DM Sans',sans-serif">Sans — DM Sans</option>
+          <option value="Verdana,sans-serif">Sans — Verdana</option>
+          <option value="'Courier New',monospace">Mono — Courier</option>
+          <option value="'Arial Narrow',Arial,sans-serif">Condensed</option>
+        </select>
+      </div>
+      <div><div class="sr"><span class="lbl" style="margin:0">Ukuran</span><span class="val" id="szv">52</span></div><input type="range" min="10" max="200" value="52" step="1" id="szs" oninput="T[AI].size=+this.value;document.getElementById('szv').textContent=this.value;draw()"></div>
+      <div><span class="lbl">Gaya</span>
+        <div class="row">
+          <button class="xb" id="wn" onclick="setW('normal')">Regular</button>
+          <button class="xb on" id="wb" onclick="setW('bold')">Bold</button>
+          <button class="xb" id="wi" onclick="togI()">Italic</button>
+        </div>
+      </div>
+      <div><span class="lbl">Align</span>
+        <div class="row">
+          <button class="xb on" id="aal" onclick="setAl('left')">Kiri</button>
+          <button class="xb" id="aac" onclick="setAl('center')">Tengah</button>
+          <button class="xb" id="aar" onclick="setAl('right')">Kanan</button>
+        </div>
+      </div>
+      <div><span class="lbl">Warna teks</span>
+        <div class="sws" id="tsws">
+          <div class="sw on" style="background:#fff;outline:1px solid #444;outline-offset:1px" onclick="setTC(this,'#ffffff')"></div>
+          <div class="sw" style="background:#1a1a1a;outline:1px solid #333;outline-offset:1px" onclick="setTC(this,'#1a1a1a')"></div>
+          <div class="sw" style="background:#F5E6C8;outline:1px solid #444;outline-offset:1px" onclick="setTC(this,'#F5E6C8')"></div>
+          <div class="sw" style="background:#e8c84a" onclick="setTC(this,'#e8c84a')"></div>
+          <div class="sw" style="background:#e87a7a" onclick="setTC(this,'#e87a7a')"></div>
+          <div class="sw" style="background:#7ac8ef" onclick="setTC(this,'#7ac8ef')"></div>
+          <input type="color" id="tcc" value="#ffffff" onchange="T[AI].color=this.value;draw()">
+        </div>
+      </div>
+      <div><div class="sr"><span class="lbl" style="margin:0">Opacity</span><span class="val" id="tov">100%</span></div><input type="range" min="10" max="100" value="100" step="1" id="tos" oninput="T[AI].op=+this.value/100;document.getElementById('tov').textContent=this.value+'%';draw()"></div>
+      <div><div class="sr"><span class="lbl" style="margin:0">Spasi baris</span><span class="val" id="lhv">1.2</span></div><input type="range" min="0.8" max="3.0" value="1.2" step="0.1" id="lhs" oninput="T[AI].lh=+this.value;document.getElementById('lhv').textContent=(+this.value).toFixed(1);draw()"></div>
+      <div><div class="sr"><span class="lbl" style="margin:0">Lebar maks</span><span class="val" id="mwv">85%</span></div><input type="range" min="20" max="100" value="85" step="1" id="mws" oninput="T[AI].maxW=+this.value/100;document.getElementById('mwv').textContent=this.value+'%';draw()"></div>
+      <div class="hint">drag teks di kanvas · posisi bebas</div>
+    </div>
+
+    <!-- EXPORT -->
+    <div class="pane" id="pane-export">
+      <div class="ebox" id="einfo">Pilih template atau upload foto untuk melihat info.</div>
+      <div class="hdiv"></div>
+      <button class="bexp pri" id="epng" disabled onclick="doExp('png')">↓ Export PNG (lossless)</button>
+      <button class="bexp" id="ejpg" disabled onclick="doExp('jpg')">↓ Export JPG</button>
+      <button class="bexp" id="etpl" disabled onclick="doExp('tpl')">↓ Export Template PNG</button>
+      <div class="exp-prev" id="expResult">
+        <div class="exp-sm">klik kanan → "Save image as"</div>
+        <img id="expImg" src="" alt="">
+        <a id="expLink" href="" download="ig-feed.png">↓ download langsung</a>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+// ── TOAST SYSTEM ──
+function toast(msg, type='b', dur=3000){
+  const w=document.getElementById('toastWrap');
+  const t=document.createElement('div');
+  t.className=`toast toast-${type}`;
+  t.innerHTML=`<div class="toast-dot"></div><span>${msg}</span>`;
+  w.appendChild(t);
+  setTimeout(()=>{t.classList.add('out');setTimeout(()=>t.remove(),300);},dur);
+}
+
+// ── STATE ──
+const cv=document.getElementById('cv'),ctx=cv.getContext('2d'),fi=document.getElementById('fi');
+let IMG=null,IW=0,IH=0,SC=1;
+let ssUrl=null;
+let G={c:'#000000',dir:'top',op:55,reach:65,mid:55};
+let T=[
+  {text:'',x:.07,y:.70,size:60,font:'Georgia,serif',weight:'bold',  italic:false,align:'left',color:'#ffffff',op:1,   lh:1.1, maxW:.86},
+  {text:'',x:.07,y:.89,size:24,font:'Georgia,serif',weight:'normal',italic:true, align:'left',color:'#ffffff',op:.75, lh:1.35,maxW:.86}
+];
+let AI=0,drag=null,dOff={x:0,y:0};
+
+// ── TEMPLATES DEFINITION ──
+const TEMPLATES=[
+  {id:'dark-fog',   name:'Dark Fog',    w:1080,h:1350, draw:drawDarkFog},
+  {id:'warm-dusk',  name:'Warm Dusk',   w:1080,h:1350, draw:drawWarmDusk},
+  {id:'minimal-bw', name:'Minimal B&W', w:1080,h:1350, draw:drawMinimalBW},
+  {id:'forest',     name:'Deep Forest', w:1080,h:1350, draw:drawForest},
+  {id:'square-dark',name:'Square Dark', w:1080,h:1080, draw:drawSquareDark},
+  {id:'square-warm',name:'Square Warm', w:1080,h:1080, draw:drawSquareWarm},
+  {id:'land-blue',  name:'Blue Hour',   w:1080,h:608,  draw:drawLandBlue},
+  {id:'story-night',name:'Night Story', w:1080,h:1920, draw:drawStoryNight},
+];
+
+// template draw functions
+function drawDarkFog(c,W,H){
+  const g=c.createLinearGradient(0,0,0,H);
+  g.addColorStop(0,'#0a0a12');g.addColorStop(.5,'#141420');g.addColorStop(1,'#0a0a0a');
+  c.fillStyle=g;c.fillRect(0,0,W,H);
+  // grain
+  for(let i=0;i<4000;i++){c.fillStyle=`rgba(180,180,220,${Math.random()*.025})`;c.fillRect(Math.random()*W,Math.random()*H,1,1);}
+  // fog layers
+  for(let y=H*.4;y<H;y+=H*.08){const fg=c.createLinearGradient(0,y,0,y+H*.12);fg.addColorStop(0,'transparent');fg.addColorStop(.5,`rgba(30,30,50,${.04+Math.random()*.04})`);fg.addColorStop(1,'transparent');c.fillStyle=fg;c.fillRect(0,y,W,H*.12);}
+  // accent line
+  c.strokeStyle='rgba(150,140,200,.15)';c.lineWidth=1;c.beginPath();c.moveTo(W*.08,H*.08);c.lineTo(W*.92,H*.08);c.stroke();
+}
+function drawWarmDusk(c,W,H){
+  const g=c.createLinearGradient(0,0,0,H);
+  g.addColorStop(0,'#1a0a05');g.addColorStop(.4,'#2d1208');g.addColorStop(.7,'#3d1f10');g.addColorStop(1,'#0f0805');
+  c.fillStyle=g;c.fillRect(0,0,W,H);
+  // warm glow
+  const rg=c.createRadialGradient(W*.5,H*.35,0,W*.5,H*.35,W*.6);
+  rg.addColorStop(0,'rgba(200,100,30,.18)');rg.addColorStop(1,'transparent');
+  c.fillStyle=rg;c.fillRect(0,0,W,H);
+  // grain
+  for(let i=0;i<3500;i++){c.fillStyle=`rgba(220,150,80,${Math.random()*.02})`;c.fillRect(Math.random()*W,Math.random()*H,1,1);}
+}
+function drawMinimalBW(c,W,H){
+  c.fillStyle='#f2f0ed';c.fillRect(0,0,W,H);
+  // grid lines
+  c.strokeStyle='rgba(0,0,0,.05)';c.lineWidth=1;
+  for(let x=0;x<W;x+=W/12){c.beginPath();c.moveTo(x,0);c.lineTo(x,H);c.stroke();}
+  for(let y=0;y<H;y+=H/16){c.beginPath();c.moveTo(0,y);c.lineTo(W,y);c.stroke();}
+  // corner marks
+  [[W*.06,H*.04],[W*.94,H*.04],[W*.06,H*.96],[W*.94,H*.96]].forEach(([x,y])=>{
+    c.strokeStyle='rgba(0,0,0,.25)';c.lineWidth=2;const s=24;c.beginPath();
+    if(x<W/2&&y<H/2){c.moveTo(x+s,y);c.lineTo(x,y);c.lineTo(x,y+s);}
+    else if(x>W/2&&y<H/2){c.moveTo(x-s,y);c.lineTo(x,y);c.lineTo(x,y+s);}
+    else if(x<W/2&&y>H/2){c.moveTo(x,y-s);c.lineTo(x,y);c.lineTo(x+s,y);}
+    else{c.moveTo(x-s,y);c.lineTo(x,y);c.lineTo(x,y-s);}
+    c.stroke();
+  });
+  c.strokeStyle='rgba(0,0,0,.12)';c.lineWidth=1;c.beginPath();c.moveTo(W*.06,H*.92);c.lineTo(W*.94,H*.92);c.stroke();
+}
+function drawForest(c,W,H){
+  const g=c.createLinearGradient(0,0,0,H);
+  g.addColorStop(0,'#050d06');g.addColorStop(.5,'#0a1a0c');g.addColorStop(1,'#05100a');
+  c.fillStyle=g;c.fillRect(0,0,W,H);
+  const rg=c.createRadialGradient(W*.5,H*.2,0,W*.5,H*.2,W*.5);
+  rg.addColorStop(0,'rgba(60,120,60,.12)');rg.addColorStop(1,'transparent');
+  c.fillStyle=rg;c.fillRect(0,0,W,H);
+  for(let i=0;i<3000;i++){c.fillStyle=`rgba(100,180,100,${Math.random()*.018})`;c.fillRect(Math.random()*W,Math.random()*H,1,1);}
+}
+function drawSquareDark(c,W,H){
+  c.fillStyle='#0e0e0e';c.fillRect(0,0,W,H);
+  const g=c.createLinearGradient(0,H,W,0);
+  g.addColorStop(0,'rgba(40,30,60,.5)');g.addColorStop(1,'rgba(10,10,20,.5)');
+  c.fillStyle=g;c.fillRect(0,0,W,H);
+  for(let i=0;i<2500;i++){c.fillStyle=`rgba(200,200,255,${Math.random()*.02})`;c.fillRect(Math.random()*W,Math.random()*H,1,1);}
+  c.strokeStyle='rgba(255,255,255,.06)';c.lineWidth=1;c.strokeRect(W*.05,H*.05,W*.9,H*.9);
+}
+function drawSquareWarm(c,W,H){
+  const g=c.createLinearGradient(0,0,W,H);
+  g.addColorStop(0,'#1a1008');g.addColorStop(1,'#0a0805');
+  c.fillStyle=g;c.fillRect(0,0,W,H);
+  const rg=c.createRadialGradient(W*.3,H*.3,0,W*.3,H*.3,W*.7);
+  rg.addColorStop(0,'rgba(180,100,30,.15)');rg.addColorStop(1,'transparent');
+  c.fillStyle=rg;c.fillRect(0,0,W,H);
+  for(let i=0;i<2500;i++){c.fillStyle=`rgba(220,160,80,${Math.random()*.02})`;c.fillRect(Math.random()*W,Math.random()*H,1,1);}
+}
+function drawLandBlue(c,W,H){
+  const g=c.createLinearGradient(0,0,0,H);
+  g.addColorStop(0,'#05080f');g.addColorStop(.5,'#0a1525');g.addColorStop(1,'#060b18');
+  c.fillStyle=g;c.fillRect(0,0,W,H);
+  const rg=c.createRadialGradient(W*.5,H*.5,0,W*.5,H*.5,W*.5);
+  rg.addColorStop(0,'rgba(40,80,160,.2)');rg.addColorStop(1,'transparent');
+  c.fillStyle=rg;c.fillRect(0,0,W,H);
+  for(let i=0;i<2000;i++){c.fillStyle=`rgba(100,140,220,${Math.random()*.02})`;c.fillRect(Math.random()*W,Math.random()*H,1,1);}
+  c.strokeStyle='rgba(80,120,200,.12)';c.lineWidth=1;c.beginPath();c.moveTo(0,H*.5);c.lineTo(W,H*.5);c.stroke();
+}
+function drawStoryNight(c,W,H){
+  const g=c.createLinearGradient(0,0,0,H);
+  g.addColorStop(0,'#050510');g.addColorStop(.3,'#0a0a20');g.addColorStop(.7,'#100818');g.addColorStop(1,'#05050e');
+  c.fillStyle=g;c.fillRect(0,0,W,H);
+  // stars
+  for(let i=0;i<200;i++){const x=Math.random()*W,y=Math.random()*H*.6,r=Math.random()*.8+.2;c.beginPath();c.arc(x,y,r,0,Math.PI*2);c.fillStyle=`rgba(255,255,255,${Math.random()*.5+.1})`;c.fill();}
+  // nebula
+  const rg=c.createRadialGradient(W*.4,H*.25,0,W*.4,H*.25,W*.35);
+  rg.addColorStop(0,'rgba(100,60,160,.1)');rg.addColorStop(1,'transparent');
+  c.fillStyle=rg;c.fillRect(0,0,W,H);
+  for(let i=0;i<3000;i++){c.fillStyle=`rgba(150,130,220,${Math.random()*.015})`;c.fillRect(Math.random()*W,Math.random()*H,1,1);}
+}
+
+// ── BUILD TEMPLATE GRID ──
+function buildTemplateGrid(){
+  const grid=document.getElementById('tplGrid');grid.innerHTML='';
+  TEMPLATES.forEach(tpl=>{
+    const card=document.createElement('div');card.className='tpl-card';
+    const tc=document.createElement('canvas');
+    const PREV=160;
+    const ratio=tpl.h/tpl.w;
+    tc.width=PREV;tc.height=Math.round(PREV*ratio);
+    tc.style.width='100%';tc.style.height='auto';
+    const xc=tc.getContext('2d');
+    xc.scale(PREV/tpl.w,PREV/tpl.w);
+    tpl.draw(xc,tpl.w,tpl.h);
+    card.appendChild(tc);
+    const lbl=document.createElement('div');lbl.className='tpl-card-label';
+    lbl.innerHTML=tpl.name+'<span class="tpl-card-size">'+tpl.w+'×'+tpl.h+'</span>';
+    card.appendChild(lbl);
+    card.onclick=()=>applyTemplate(tpl);
+    grid.appendChild(card);
+  });
+}
+
+function applyTemplate(tpl){
+  toast('Menerapkan template '+tpl.name+'...','b',1500);
+  const tc=document.createElement('canvas');tc.width=tpl.w;tc.height=tpl.h;
+  const xc=tc.getContext('2d');tpl.draw(xc,tpl.w,tpl.h);
+  tc.toBlob(blob=>{
+    if(!blob){toast('Gagal membuat template','r');return;}
+    const url=URL.createObjectURL(blob);
+    const img=new Image();
+    img.onload=()=>{
+      IMG=img;IW=tpl.w;IH=tpl.h;
+      URL.revokeObjectURL(url);
+      setup();
+      toast('Template '+tpl.name+' diterapkan','g',2500);
+    };
+    img.src=url;
+  },'image/png');
+}
+
+// ── CANVAS SIZE PRESETS ──
+const SIZE_MAP={
+  'portrait-feed':{w:1080,h:1350},
+  'square':{w:1080,h:1080},
+  'landscape':{w:1080,h:608},
+  'story':{w:1080,h:1920},
+  'portrait-ad':{w:1080,h:1350},
+  'reel-cover':{w:420,h:654}
+};
+function setCanvasSize(el,key){
+  document.querySelectorAll('.sz-card').forEach(c=>c.classList.remove('on'));
+  el.classList.add('on');
+  const{w,h}=SIZE_MAP[key];
+  toast('Kanvas diatur ke '+w+'×'+h+'px','b',2000);
+  if(!IMG){
+    // create blank canvas with that size
+    const blank=document.createElement('canvas');blank.width=w;blank.height=h;
+    const bx=blank.getContext('2d');bx.fillStyle='#0e0e0e';bx.fillRect(0,0,w,h);
+    blank.toBlob(blob=>{
+      const url=URL.createObjectURL(blob);
+      const img=new Image();img.onload=()=>{IMG=img;IW=w;IH=h;URL.revokeObjectURL(url);setup();};img.src=url;
+    },'image/png');
+  } else {
+    // rescale existing — redraw onto new size
+    const tc=document.createElement('canvas');tc.width=w;tc.height=h;
+    const xc=tc.getContext('2d');
+    xc.drawImage(IMG,0,0,w,h);
+    tc.toBlob(blob=>{
+      const url=URL.createObjectURL(blob);
+      const img=new Image();img.onload=()=>{IMG=img;IW=w;IH=h;URL.revokeObjectURL(url);setup();toast('Ukuran kanvas diperbarui','g',2000);};img.src=url;
+    },'image/png');
+  }
+}
+
+// ── FILE LOAD ──
+fi.onchange=e=>{if(e.target.files[0])loadFile(e.target.files[0]);};
+const dzel=document.getElementById('dz');
+dzel.ondragover=e=>{e.preventDefault();dzel.classList.add('ov');};
+dzel.ondragleave=()=>dzel.classList.remove('ov');
+dzel.ondrop=e=>{e.preventDefault();dzel.classList.remove('ov');if(e.dataTransfer.files[0])loadFile(e.dataTransfer.files[0]);};
+document.getElementById('carea').ondragover=e=>e.preventDefault();
+document.getElementById('carea').ondrop=e=>{e.preventDefault();if(e.dataTransfer.files[0])loadFile(e.dataTransfer.files[0]);};
+
+function loadFile(f){
+  toast('Memuat gambar...','a',2000);
+  const url=URL.createObjectURL(f);
+  const img=new Image();
+  img.onload=()=>{IMG=img;IW=img.naturalWidth;IH=img.naturalHeight;URL.revokeObjectURL(url);setup();toast('Gambar berhasil dimuat — '+IW+'×'+IH+'px','g',3000);};
+  img.onerror=()=>{toast('Gagal membaca file gambar','r');URL.revokeObjectURL(url);};
+  img.src=url;
+}
+function loadUrl(src){return new Promise((res,rej)=>{const i=new Image();i.crossOrigin='anonymous';i.onload=()=>res(i);i.onerror=()=>rej(new Error('load fail'));i.src=src;});}
+
+function setup(){
+  const MAX=1920;
+  if(IW>MAX){IH=Math.round(IH*MAX/IW);IW=MAX;}
+  if(IH>MAX){IW=Math.round(IW*MAX/IH);IH=MAX;}
+  const ca=document.getElementById('carea');
+  SC=Math.min((ca.clientWidth-32)/IW,(ca.clientHeight-32)/IH,1);
+  cv.width=IW;cv.height=IH;
+  cv.style.width=Math.round(IW*SC)+'px';cv.style.height=Math.round(IH*SC)+'px';
+  document.getElementById('dz').style.display='none';
+  document.getElementById('cw').style.display='block';
+  document.getElementById('epng').disabled=false;
+  document.getElementById('ejpg').disabled=false;
+  document.getElementById('etpl').disabled=false;
+  document.getElementById('expResult').classList.remove('show');
+  updEInfo();st('g','Kanvas siap — '+IW+'×'+IH+'px');draw();
+}
+
+// ── DRAW ──
+function draw(){
+  if(!IMG)return;
+  ctx.clearRect(0,0,IW,IH);ctx.drawImage(IMG,0,0,IW,IH);
+  grad(ctx,IW,IH);T.forEach((t,i)=>txt(ctx,t,IW,IH,i===AI));
+}
+
+function ph(h){const f=h.replace('#','');if(f.length===3)return[parseInt(f[0]+f[0],16),parseInt(f[1]+f[1],16),parseInt(f[2]+f[2],16)];return[parseInt(f.slice(0,2),16),parseInt(f.slice(2,4),16),parseInt(f.slice(4,6),16)];}
+
+function grad(c,W,H){
+  const[r,g,b]=ph(G.c),op=G.op/100,reach=G.reach/100,mid=G.mid/100;
+  let x0,y0,x1,y1;
+  if(G.dir==='top'){x0=0;y0=H;x1=0;y1=H*(1-reach);}
+  else if(G.dir==='bot'){x0=0;y0=0;x1=0;y1=H*reach;}
+  else if(G.dir==='left'){x0=W;y0=0;x1=W*(1-reach);y1=0;}
+  else{x0=0;y0=0;x1=W*reach;y1=0;}
+  const gr=c.createLinearGradient(x0,y0,x1,y1);
+  gr.addColorStop(0,`rgba(${r},${g},${b},${op.toFixed(2)})`);
+  gr.addColorStop(mid,`rgba(${r},${g},${b},${(op*.28).toFixed(2)})`);
+  gr.addColorStop(1,`rgba(${r},${g},${b},0)`);
+  c.fillStyle=gr;c.fillRect(0,0,W,H);
+}
+
+function mkFont(t){return(t.italic?'italic ':'')+t.weight+' '+t.size+'px '+t.font;}
+function wrap(c,t,mp){
+  c.font=mkFont(t);const lines=[];
+  (t.text||'').split('\n').forEach(para=>{
+    if(!para){lines.push('');return;}
+    let cur='';para.split(' ').forEach(w=>{const test=cur?cur+' '+w:w;if(c.measureText(test).width>mp&&cur){lines.push(cur);cur=w;}else cur=test;});if(cur)lines.push(cur);
+  });
+  return lines.length?lines:[''];
+}
+
+function txt(c,t,W,H,active){
+  if(!t.text||!t.text.trim())return;
+  const mp=t.maxW*W,lines=wrap(c,t,mp),lh=t.size*t.lh,px=t.x*W,py=t.y*H;
+  const[r,g,b]=ph(t.color);
+  c.font=mkFont(t);c.textAlign=t.align;c.textBaseline='top';
+  c.shadowColor='rgba(0,0,0,.7)';c.shadowBlur=t.size*.3;
+  c.fillStyle=`rgba(${r},${g},${b},${t.op})`;
+  lines.forEach((l,i)=>c.fillText(l,px,py+i*lh));c.shadowBlur=0;
+  if(active){
+    const tw=Math.max(...lines.map(l=>c.measureText(l).width)),th=lines.length*lh;
+    let bx=px-(t.align==='center'?tw/2:t.align==='right'?tw:0);const pd=8;
+    c.strokeStyle='rgba(200,184,162,.5)';c.lineWidth=1.5;c.setLineDash([4,4]);
+    c.strokeRect(bx-pd,py-pd,tw+pd*2,th+pd*2);c.setLineDash([]);
+  }
+}
+
+// ── EXPORT ──
+function updEInfo(){
+  if(!IMG)return;
+  document.getElementById('einfo').innerHTML=
+    'kanvas: <strong>'+IW+'×'+IH+'px</strong><br>'+
+    'png = lossless · jpg = lebih kecil<br>'+
+    'template = png tanpa teks';
+}
+
+function buildEC(withText=true){
+  const ec=document.createElement('canvas');ec.width=IW;ec.height=IH;
+  const ex=ec.getContext('2d');
+  ex.drawImage(IMG,0,0,IW,IH);
+  grad(ex,IW,IH);
+  if(withText) T.forEach(t=>{if(t.text&&t.text.trim())txt(ex,t,IW,IH,false);});
+  return ec;
+}
+
+function doExp(type){
+  if(!IMG){toast('Upload foto atau pilih template dulu','r');return;}
+  const isTemplate=type==='tpl';
+  const mime=type==='jpg'?'image/jpeg':'image/png';
+  const qual=type==='jpg'?.93:undefined;
+  const label=isTemplate?'Template PNG':type.toUpperCase();
+  toast('Memproses export '+label+'...','a',2000);
+  document.getElementById('expResult').classList.remove('show');
+  setTimeout(()=>{
+    try{
+      const ec=buildEC(!isTemplate);
+      ec.toBlob(blob=>{
+        if(!blob){toast('Gagal generate blob — coba lagi','r');return;}
+        const burl=URL.createObjectURL(blob);
+        const fname='ig-feed-'+Date.now()+'.'+(type==='jpg'?'jpg':'png');
+        const a=document.createElement('a');a.href=burl;a.download=fname;a.style.display='none';
+        document.body.appendChild(a);a.click();
+        setTimeout(()=>{URL.revokeObjectURL(burl);try{document.body.removeChild(a);}catch(e){}},2000);
+        toast('Export '+label+' berhasil — '+IW+'×'+IH+'px','g',3500);
+        showPrev(burl,type==='jpg'?'jpg':'png',IW,IH);
+      },mime,qual);
+    }catch(err){
+      toast('Export error: '+err.message,'r');
+      console.error(err);
+    }
+  },60);
+}
+
+function showPrev(url,type,w,h){
+  document.getElementById('expImg').src=url;
+  const lnk=document.getElementById('expLink');
+  lnk.href=url;lnk.download='ig-feed.'+type;
+  lnk.textContent='↓ download '+type.toUpperCase()+' ('+w+'×'+h+'px)';
+  document.getElementById('expResult').classList.add('show');
+  goTab('export');
+}
+
+// ── DRAG TEXT ──
+function getP(e){const r=cv.getBoundingClientRect();return{x:(e.clientX-r.left)/SC/IW,y:(e.clientY-r.top)/SC/IH};}
+function hitTest(p){
+  for(let i=T.length-1;i>=0;i--){
+    const t=T[i];if(!t.text||!t.text.trim())continue;
+    const lines=wrap(ctx,t,t.maxW*IW);
+    const tw=Math.max(...lines.map(l=>ctx.measureText(l).width))/IW,th=lines.length*t.size*t.lh/IH;
+    const bx=t.x-(t.align==='center'?tw/2:t.align==='right'?tw:0);
+    if(p.x>=bx-.04&&p.x<=bx+tw+.04&&p.y>=t.y-.04&&p.y<=t.y+th+.04)return i;
+  }
+  return -1;
+}
+cv.addEventListener('mousedown',e=>{if(!IMG)return;const p=getP(e),h=hitTest(p);if(h>=0){drag=h;dOff={x:p.x-T[h].x,y:p.y-T[h].y};selLayer(h);e.preventDefault();}});
+window.addEventListener('mousemove',e=>{if(drag===null)return;const r=cv.getBoundingClientRect();T[drag].x=Math.max(0,Math.min(.97,(e.clientX-r.left)/SC/IW-dOff.x));T[drag].y=Math.max(0,Math.min(.97,(e.clientY-r.top)/SC/IH-dOff.y));draw();});
+window.addEventListener('mouseup',()=>{drag=null;});
+cv.addEventListener('touchstart',e=>{if(!IMG)return;const t=e.touches[0],r=cv.getBoundingClientRect();const p={x:(t.clientX-r.left)/SC/IW,y:(t.clientY-r.top)/SC/IH};const h=hitTest(p);if(h>=0){drag=h;dOff={x:p.x-T[h].x,y:p.y-T[h].y};selLayer(h);e.preventDefault();}},{passive:false});
+window.addEventListener('touchmove',e=>{if(drag===null)return;const t=e.touches[0],r=cv.getBoundingClientRect();T[drag].x=Math.max(0,Math.min(.97,(t.clientX-r.left)/SC/IW-dOff.x));T[drag].y=Math.max(0,Math.min(.97,(t.clientY-r.top)/SC/IH-dOff.y));draw();},{passive:false});
+window.addEventListener('touchend',()=>{drag=null;});
+
+// ── TEXT LAYERS ──
+function buildLayers(){
+  const c=document.getElementById('tlayers');c.innerHTML='';
+  T.forEach((t,i)=>{
+    const b=document.createElement('button');b.className='tt'+(i===AI?' on':'');
+    b.textContent=t.text?t.text.slice(0,12)+(t.text.length>12?'…':''):'layer '+(i+1);
+    b.onclick=()=>selLayer(i);c.appendChild(b);
+    if(T.length>1){const d=document.createElement('button');d.className='tt del';d.textContent='×';d.title='Hapus layer';d.onclick=()=>{T.splice(i,1);AI=Math.min(AI,T.length-1);buildLayers();syncUI();draw();toast('Layer dihapus','a',2000);};c.appendChild(d);}
+  });
+}
+function addLayer(){
+  T.push({text:'',x:.07,y:.5+T.length*.08,size:36,font:'Georgia,serif',weight:'normal',italic:false,align:'left',color:'#ffffff',op:1,lh:1.2,maxW:.86});
+  AI=T.length-1;buildLayers();syncUI();goTab('teks');
+  toast('Layer teks baru ditambahkan','b',2000);
+  setTimeout(()=>document.getElementById('tin').focus(),50);
+}
+function selLayer(i){AI=i;buildLayers();syncUI();draw();}
+function syncUI(){
+  const t=T[AI];
+  document.getElementById('tin').value=t.text;
+  document.getElementById('szs').value=t.size;document.getElementById('szv').textContent=t.size;
+  document.getElementById('tos').value=Math.round(t.op*100);document.getElementById('tov').textContent=Math.round(t.op*100)+'%';
+  document.getElementById('lhs').value=t.lh;document.getElementById('lhv').textContent=t.lh.toFixed(1);
+  document.getElementById('mws').value=Math.round(t.maxW*100);document.getElementById('mwv').textContent=Math.round(t.maxW*100)+'%';
+  document.getElementById('fsel').value=t.font;
+  ['aal','aac','aar'].forEach((id,j)=>document.getElementById(id).classList.toggle('on',['left','center','right'][j]===t.align));
+  document.getElementById('wn').classList.toggle('on',t.weight==='normal');
+  document.getElementById('wb').classList.toggle('on',t.weight==='bold');
+  document.getElementById('wi').classList.toggle('on',t.italic);
+  document.getElementById('tcc').value=t.color;
+}
+
+// ── CONTROLS ──
+function goTab(n){
+  document.querySelectorAll('.tab').forEach((t,i)=>t.classList.toggle('on',['template','gradient','teks','export'][i]===n));
+  document.querySelectorAll('.pane').forEach(p=>p.classList.remove('on'));
+  document.getElementById('pane-'+n).classList.add('on');
+}
+function setW(w){T[AI].weight=w;document.getElementById('wn').classList.toggle('on',w==='normal');document.getElementById('wb').classList.toggle('on',w==='bold');draw();}
+function togI(){T[AI].italic=!T[AI].italic;document.getElementById('wi').classList.toggle('on',T[AI].italic);draw();}
+function setAl(a){T[AI].align=a;['aal','aac','aar'].forEach((id,j)=>document.getElementById(id).classList.toggle('on',['left','center','right'][j]===a));draw();}
+function setGC(el,c){document.querySelectorAll('#gsws .sw').forEach(s=>s.classList.remove('on'));el.classList.add('on');G.c=c;document.getElementById('gcc').value=c;draw();}
+function setDir(el,d){document.querySelectorAll('#drow .xb').forEach(b=>b.classList.remove('on'));el.classList.add('on');G.dir=d;draw();}
+function setTC(el,c){document.querySelectorAll('#tsws .sw').forEach(s=>s.classList.remove('on'));el.classList.add('on');T[AI].color=c;document.getElementById('tcc').value=c;draw();}
+
+// ── SCREENSHOT ──
+async function grabSS(){
+  const url=document.getElementById('urlIn').value.trim();
+  if(!url){toast('Masukkan URL terlebih dahulu','r');return;}
+  const plat=detPlat(url);
+  toast('Mengambil konten dari '+plat+'...','a',3000);
+  document.getElementById('ssBtn').disabled=true;
+  try{if(/youtu/i.test(url))await ytThumb(url);else await ogImg(url,plat);}
+  catch(e){toast('Gagal: '+e.message,'r');}
+  document.getElementById('ssBtn').disabled=false;
+}
+function detPlat(u){if(/tiktok/i.test(u))return'TikTok';if(/instagram/i.test(u))return'Instagram';if(/youtu/i.test(u))return'YouTube';if(/twitter|x\.com/i.test(u))return'Twitter/X';if(/facebook/i.test(u))return'Facebook';return'Web';}
+async function ytThumb(url){
+  const m=url.match(/[?&]v=([^&]+)/)||url.match(/youtu\.be\/([^?]+)/)||url.match(/\/shorts\/([^?]+)/);
+  if(!m)throw new Error('ID YouTube tidak ditemukan');
+  const vid=m[1].split('?')[0];
+  for(const q of['maxresdefault','hqdefault','sddefault']){
+    try{const img=await loadUrl('https://img.youtube.com/vi/'+vid+'/'+q+'.jpg');if(img.naturalWidth>100){IMG=img;IW=img.naturalWidth;IH=img.naturalHeight;setup();toast('Thumbnail YouTube dimuat ('+IW+'×'+IH+'px)','g',3000);return;}}catch(e){continue;}
+  }
+  throw new Error('Thumbnail tidak tersedia');
+}
+async function ogImg(url,plat){
+  const proxies=['https://api.allorigins.win/raw?url='+encodeURIComponent(url),'https://corsproxy.io/?'+encodeURIComponent(url)];
+  let found=null;
+  for(const px of proxies){
+    try{const r=await fetch(px,{signal:AbortSignal.timeout(9000)});if(!r.ok)continue;const h=await r.text();found=extOG(h,url);if(found)break;}catch(e){continue;}
+  }
+  if(found){ssUrl=found;document.getElementById('ovm').textContent='preview '+plat+' ditemukan — gunakan sebagai foto?';document.getElementById('ovi').src=found;document.getElementById('ovlay').classList.add('show');toast('Preview '+plat+' ditemukan','g',2500);}
+  else toast(plat+' terblokir CORS — silakan upload foto manual','a',4000);
+}
+function extOG(html,base){
+  const pats=[/property=["']og:image["'][^>]*content=["']([^"']+)["']/i,/content=["']([^"']+)["'][^>]*property=["']og:image["']/i,/name=["']twitter:image["'][^>]*content=["']([^"']+)["']/i];
+  for(const p of pats){const m=html.match(p);if(m&&m[1]){let u=m[1].replace(/&amp;/g,'&');if(u.startsWith('//'))u='https:'+u;if(u.startsWith('/'))u=new URL(u,base).href;return u;}}
+  return null;
+}
+function closeOv(){document.getElementById('ovlay').classList.remove('show');}
+function usePreview(){
+  if(!ssUrl)return;
+  toast('Memuat gambar preview...','a',2000);
+  loadUrl(ssUrl).then(img=>{IMG=img;IW=img.naturalWidth;IH=img.naturalHeight;setup();closeOv();toast('Gambar preview berhasil dimuat','g',2500);})
+  .catch(()=>{toast('Gambar terblokir CORS — upload manual','r');closeOv();});
+}
+
+function st(type,msg){document.getElementById('sdot').className='sdot'+(type?' '+type:'');document.getElementById('stxt').textContent=msg;}
+
+// ── INIT ──
+buildLayers();
+buildTemplateGrid();
+toast('IG Feed Studio siap digunakan','g',2500);
+</script>
+</body>
+</html>
